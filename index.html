@@ -1,0 +1,124 @@
+'use client'
+
+import React, { useEffect, useRef } from 'react'
+
+export default function Component() {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const textToSpell = 'GUILLERMO GROTZ'
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    let animationFrameId: number
+
+    const resizeCanvas = () => {
+      canvas.width = window.innerWidth
+      canvas.height = window.innerHeight
+    }
+
+    resizeCanvas()
+
+    const fontSize = window.innerWidth < 768 ? 10 : 14
+    let columns = Math.ceil(canvas.width / fontSize)
+    let drops: number[] = new Array(columns).fill(0)
+
+    const matrixChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ123456789@#$%^&*()*&^%'
+    const targetChars = textToSpell.split('')
+    let revealedText = new Array(textToSpell.length).fill(' ')
+    let remainingIndices = [...Array(textToSpell.length).keys()]
+
+    // Calculate fall speed based on canvas height
+    const fallSpeed = Math.max(1, Math.floor(canvas.height / 1000))
+
+    // Track which columns have passed the middle
+    const columnsPastMiddle = new Set<number>()
+
+    function draw() {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.05)'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+      ctx.fillStyle = '#0F0'
+      ctx.font = `${fontSize}px monospace`
+
+      for (let i = 0; i < columns; i++) {
+        const useTargetChar = Math.random() < 0.1 && targetChars.length > 0
+        const char = useTargetChar
+          ? targetChars.splice(Math.floor(Math.random() * targetChars.length), 1)[0]
+          : matrixChars[Math.floor(Math.random() * matrixChars.length)]
+
+        const x = i * fontSize
+        const y = drops[i] * fontSize
+
+        ctx.fillText(char, x, y)
+
+        if (y > canvas.height && Math.random() > 0.975) {
+          drops[i] = 0
+        } else if (y > canvas.height / 2 && !columnsPastMiddle.has(i)) {
+          columnsPastMiddle.add(i)
+        }
+
+        drops[i] += fallSpeed
+
+        // Randomly reveal the next character only if a column has passed the middle
+        if (columnsPastMiddle.size > 0 && Math.random() > 0.9995 && remainingIndices.length > 0) {
+          const randomIndex = Math.floor(Math.random() * remainingIndices.length)
+          const charIndex = remainingIndices[randomIndex]
+          revealedText[charIndex] = textToSpell[charIndex]
+          remainingIndices.splice(randomIndex, 1)
+        }
+      }
+
+      // Refill targetChars if empty
+      if (targetChars.length === 0) {
+        targetChars.push(...textToSpell.split(''))
+      }
+
+      // Display revealed text in the middle
+      ctx.font = `bold ${fontSize * 2}px monospace`
+      const textWidth = ctx.measureText(textToSpell).width
+      const startX = (canvas.width - textWidth) / 2
+      const startY = canvas.height / 2
+
+      for (let i = 0; i < revealedText.length; i++) {
+        const char = revealedText[i]
+        const x = startX + i * fontSize * 1.5 // Increased spacing for better readability
+        ctx.fillText(char, x, startY)
+      }
+
+      animationFrameId = requestAnimationFrame(draw)
+    }
+
+    draw()
+
+    const handleResize = () => {
+      resizeCanvas()
+      columns = Math.ceil(canvas.width / fontSize)
+      drops = new Array(columns).fill(0).map(() => Math.random() * canvas.height)
+      revealedText = new Array(textToSpell.length).fill(' ')
+      remainingIndices = [...Array(textToSpell.length).keys()]
+      columnsPastMiddle.clear()
+    }
+
+    window.addEventListener('resize', handleResize)
+
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      cancelAnimationFrame(animationFrameId)
+    }
+  }, [])
+
+  return (
+    <div className="relative w-full h-screen bg-black overflow-hidden">
+      <canvas
+        ref={canvasRef}
+        className="absolute inset-0"
+        aria-label="Matrix-style animation revealing text as letters fall"
+      />
+      <div className="sr-only">Matrix Animation</div>
+    </div>
+  )
+}
